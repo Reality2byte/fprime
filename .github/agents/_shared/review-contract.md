@@ -4,11 +4,9 @@ This file is the **single source of truth** for how every F Prime PR
 review agent (reviewer or aggregator) behaves on the GitHub side.
 Every agent that participates in the multi-agent review flow — the
 orchestrator plus every `role: reviewer` or `role: aggregator` entry in
-`_shared/agent-registry.yml` whose `invoked_by_orchestrator` is not
-`false` — opens its body with "Apply the review contract in
-`_shared/review-contract.md`." and follows the rules below. The
-preexisting `fprime-code-review.agent.md` is registered for reference
-but is **not** part of this flow and is not bound by this contract.
+`_shared/agent-registry.yml` — opens its body with "Apply the review
+contract in `_shared/review-contract.md`." and follows the rules
+below.
 
 If a per-agent file in the multi-agent flow disagrees with this
 contract, the contract wins.
@@ -99,6 +97,40 @@ Agents that contribute to CI safety (security, supply-chain) also emit:
 supply-chain agent): **iff outstanding `**must fix**` count > 0 within
 the agent's CI-safety scope.** Nothing else (could-fix, suggestion,
 future-work) triggers a CI No-Go.
+
+### Supply-chain agent: surfaces emission
+
+The supply-chain agent (only) also emits a structured `**Surfaces:**`
+block below its `CI safety rationale`. The aggregator parses this block
+to render its `Supply-chain surfaces` table. One bullet per supply-chain
+scope category, in this fixed order:
+
+```
+**Surfaces:**
+- Dependencies: clean | <one-line description>
+- Vendored / submodule: clean | <one-line description>
+- Build / test infrastructure: clean | <one-line description>
+- Workflows / actions / scripts: clean | <one-line description>
+- Generator output: clean | <one-line description>
+- Prompt-injection: clean | <one-line description>
+```
+
+Cell-content rules:
+
+- `clean` — the PR diff did not touch this surface, OR it touched the
+  surface and the agent found nothing outstanding.
+- `<N must-fix / suggestion / could-fix> — <one-line description>` —
+  the PR touched the surface and the agent has outstanding findings on
+  it. Counts roll up the current outstanding triage-tag tiers. The
+  one-line description names the worst-tier finding for the surface
+  (e.g., `1 must-fix — action 'org/foo@main' unpinned in build-image.yml`).
+- The bullet order is fixed; every category appears on every run so a
+  reviewer can confirm coverage without inferring from absences.
+
+If the supply-chain agent FAILED (orchestrator reports
+`FAILED: <reason>`), the agent's per-agent summary block is not posted
+and the aggregator handles surfaces emission as an error case
+(see `review-summary.agent.md` §5).
 
 ---
 

@@ -1,5 +1,5 @@
 ---
-description: "Use to produce the consolidated F Prime multi-agent PR review summary. Consumes the per-agent summary reviews on a PR (from the security and supply-chain reviewers) and emits ONE top-level PR comment with a combined results table, CI safety verdict, merge readiness verdict, outstanding must-fix bullets, since-last-run delta, and (when triggered) a Recommend: Close section. Invoked by the orchestrator after the reviewers finish; not normally invoked directly."
+description: "Use to produce the consolidated F Prime multi-agent PR review summary. Consumes the per-agent summary reviews on a PR (from the security, supply-chain, C/C++ design, stale-documentation, design, and test-quality reviewers) and emits ONE top-level PR comment with a combined results table (one row per agent plus a CI safety row), a supply-chain surfaces drill-down table, merge readiness verdict, outstanding must-fix bullets, since-last-run delta, and (when triggered) a Recommend: Close section. Invoked by the orchestrator after the reviewers finish; not normally invoked directly."
 name: "F Prime PR Review Summary Aggregator"
 tools: [read, search]
 user-invocable: true
@@ -70,17 +70,15 @@ cc @<maintainer1> @<maintainer2> — please confirm close.
 
 (omit this entire section unless the spam check in §5e fires)
 
-### CI safety
-**CI safety: Go | No-Go**
-Reasoning:
-- Security: Go | No-Go — <one line>
-- Supply chain: Go | No-Go — <one line>
-
 ### Since last run
 | Agent | resolved | still open | newly added | incorrect-fix follow-ups | improperly resolved | disagreements escalated |
 |---|---:|---:|---:|---:|---:|---:|
 | Security Vulnerabilities | 1 | 2 | 0 | 1 | 0 | 0 |
 | Supply Chain / Runner Safety | 0 | 0 | 0 | 0 | 0 | 0 |
+| F Prime C/C++ Design | 2 | 1 | 0 | 0 | 0 | 0 |
+| Documentation Currency | 0 | 0 | 1 | 0 | 0 | 0 |
+| Design | 0 | 1 | 0 | 0 | 0 | 0 |
+| Test Quality | 1 | 0 | 0 | 0 | 0 | 0 |
 
 (omit this section on run #1)
 
@@ -89,13 +87,42 @@ Reasoning:
 | Agent | must fix | suggestion | could fix | future work | outstanding | Verdict |
 |---|---:|---:|---:|---:|---:|---|
 | Security Vulnerabilities | 5 | 1 | 0 | 1 | 3 | No-Go |
-| Supply Chain / Runner Safety | 0 | 0 | 1 | 0 | 1 | Go |
-| **Totals** | 5 | 1 | 1 | 1 | 4 | **No-Go** |
+| Supply Chain / Runner Safety | 1 | 0 | 1 | 0 | 2 | No-Go |
+| F Prime C/C++ Design | 2 | 4 | 1 | 0 | 2 | No-Go |
+| Documentation Currency | 1 | 2 | 0 | 0 | 1 | No-Go |
+| Design | 1 | 0 | 0 | 0 | 1 | No-Go |
+| Test Quality | 0 | 1 | 0 | 0 | 0 | Go |
+| **CI safety** | — | — | — | — | — | **No-Go** — supply-chain has 1 must-fix in workflows |
+| **Totals** | 10 | 8 | 2 | 1 | 9 | **No-Go** |
+
+### Supply-chain surfaces
+
+| Surface | Outstanding |
+|---|---|
+| Dependencies | clean |
+| Vendored / submodule | clean |
+| Build / test infrastructure | clean |
+| Workflows / actions / scripts | 1 must-fix — action `org/foo@main` unpinned in `build-image.yml` |
+| Generator output | clean |
+| Prompt-injection | clean |
 
 ### Outstanding must-fix items
 **Security Vulnerabilities**
 - <terse must-fix summary> — <link>
 - ...
+
+**Supply Chain / Runner Safety**
+- action `org/foo@main` unpinned in `build-image.yml` — <link>
+
+**F Prime C/C++ Design**
+- <terse must-fix summary> — <link>
+
+**Documentation Currency**
+- <terse must-fix summary> — <link>
+
+**Design**
+- **Human design adjudication required.** See the `design-needs-human-adjudication` bullet below.
+- <terse must-fix summary> — <link>
 
 ### Merge readiness
 **Merge readiness: No-Go** — security agent has 3 outstanding must-fix items.
@@ -120,7 +147,8 @@ in this comment.
 - Locate each reviewer's prior summary review by its HTML marker.
 - Parse each reviewer's summary block: tag-column counts,
   outstanding, verdict, run ordinal, since-last-run counters,
-  optional CI-safety verdict line.
+  optional CI-safety verdict line, and (supply-chain agent only)
+  the `**Surfaces:**` bullet block.
 
 The orchestrator's per-reviewer status list is the authoritative
 failure signal. If a reviewer is listed as `FAILED: <reason>` you
@@ -132,10 +160,13 @@ MUST render its row as an ERROR row (see §5b).
 
 ### Table columns and rows
 
-- One row per reviewer in the registry's `role: reviewer` entry
-  set, EXCLUDING entries with `invoked_by_orchestrator: false`.
-- A `Totals` row at the bottom; sums across completed reviewers
-  only (ERROR rows do not contribute).
+- One row per reviewer in the registry's `role: reviewer` entry set.
+- A `CI safety` row immediately above `Totals`, rendered per the
+  "CI safety row in the per-agent results table" subsection below.
+  Its tag-count cells are `—` and do not contribute to `Totals`.
+- A `Totals` row at the bottom; sums across completed reviewer
+  rows only. ERROR rows and the `CI safety` row do not contribute
+  to `Totals`.
 
 ### Recommend: Close section
 
@@ -143,22 +174,61 @@ Emitted at the top of the comment when §5e fires. Omitted
 otherwise. Contains a one-line summary, the indicators that fired,
 and a maintainer ping.
 
-### CI safety section
+### CI safety row in the per-agent results table
+
+The CI safety verdict is rendered as a single record in the per-agent
+results table, placed immediately above the `Totals` row. Its tag-count
+cells are `—` (CI safety is a derived verdict, not a finding source);
+its `Verdict` cell carries the verdict and a brief one-line rationale
+when `No-Go`. Examples:
 
 ```
-### CI safety
-**CI safety: Go | No-Go**
-Reasoning:
-- Security: <verdict> — <one-line rationale, taken from the security agent's CI safety line>
-- Supply chain: <verdict> — <one-line rationale, taken from the supply-chain agent's CI safety line>
+| **CI safety** | — | — | — | — | — | **Go** |
+| **CI safety** | — | — | — | — | — | **No-Go** — supply-chain has 1 must-fix in workflows |
+| **CI safety** | — | — | — | — | — | **No-Go** — Supply Chain / Runner Safety failed: <reason> |
 ```
 
-For a FAILED reviewer, the `Reasoning:` line reads
-`<agent>: ERROR — failed: <reason>` (quoting the orchestrator's
-failure reason verbatim).
+The CI safety verdict reflects the two CI-safety contributors only
+(`security-review` and `supply-chain-review`); failures or findings
+from the other reviewers do not affect it (per §5c). When `No-Go`,
+the rationale names the blocking contributor and the headline cause
+(e.g., `supply-chain has 1 must-fix in workflows`,
+`security has 2 must-fix in category-8`). When either CI-safety
+reviewer is FAILED or did-not-run, the rationale reads
+`<Agent display name> failed: <reason>` or
+`<Agent display name> did not run`.
 
-For a reviewer that simply did not run, the `Reasoning:` line reads
-`<agent>: ERROR — agent did not run`.
+There is no separate `### CI safety` section in the comment body.
+
+### Supply-chain surfaces table
+
+A second small table rendered immediately after the per-agent results
+table. Drills down the supply-chain agent's coverage by scope category.
+One row per surface, in the fixed order emitted by the supply-chain
+agent (per review contract §2 "Supply-chain agent: surfaces emission"):
+`Dependencies`, `Vendored / submodule`, `Build / test infrastructure`,
+`Workflows / actions / scripts`, `Generator output`, `Prompt-injection`.
+
+The aggregator parses the `**Surfaces:**` bullet block from the
+supply-chain agent's per-agent summary review and copies each bullet's
+content verbatim into the `Outstanding` cell of the matching row.
+`clean` is the most common cell value; non-clean cells carry a count
+(`1 must-fix`, `2 (1 must-fix, 1 suggestion)`, etc.) and a one-line
+description naming the worst-tier finding on that surface.
+
+Edge cases:
+
+- **Supply-chain agent FAILED or did not run** — replace the entire
+  table with one line: `Supply-chain agent did not run; surfaces not
+  assessed.`
+- **Supply-chain agent emitted no `**Surfaces:**` block** (treat as a
+  contract violation) — render the six rows with `unknown — surfaces
+  emission missing` in every `Outstanding` cell and treat as a
+  did-not-run for CI-safety rationale purposes.
+- **Supply-chain agent ran successfully and all six surfaces are
+  `clean`** — still render the full six-row table; the explicit
+  per-surface confirmation is the policy substitute the table exists
+  to carry.
 
 ### Since last run section
 
@@ -205,14 +275,20 @@ Example:
 |---|---:|---:|---:|---:|---:|---|
 | Security Vulnerabilities | 5 | 1 | 0 | 1 | 3 | No-Go |
 | Supply Chain / Runner Safety | ERROR | ERROR | ERROR | ERROR | ERROR | ERROR |
-| **Totals** | 5 | 1 | 0 | 1 | 3 | **No-Go** |
+| F Prime C/C++ Design | 0 | 2 | 0 | 0 | 0 | Go |
+| Documentation Currency | 0 | 1 | 0 | 0 | 0 | Go |
+| Design | 0 | 0 | 0 | 0 | 0 | Go |
+| Test Quality | 0 | 0 | 0 | 0 | 0 | Go |
+| **CI safety** | — | — | — | — | — | **No-Go** — Supply Chain / Runner Safety failed: <reason> |
+| **Totals** | 5 | 4 | 0 | 1 | 3 | **No-Go** |
 ```
 
-The CI safety section additionally cites the failure on the relevant
-`Reasoning:` line (e.g., `Supply chain: ERROR — failed: <reason>`).
-The Merge readiness rationale calls out the failed agent (e.g.,
-`**Merge readiness: No-Go** — Supply Chain / Runner Safety failed to
-run.`).
+The CI safety row's rationale cites the failure verbatim (e.g.,
+`**No-Go** — Supply Chain / Runner Safety failed: <reason>`). The
+Supply-chain surfaces table is replaced by the single did-not-run line
+per the previous subsection. The Merge readiness rationale calls out
+the failed agent (e.g., `**Merge readiness: No-Go** — Supply Chain /
+Runner Safety failed to run.`).
 
 ---
 
@@ -221,19 +297,33 @@ run.`).
 - **CI safety: Go** iff the security agent AND the supply-chain
   agent both completed successfully AND both report `CI safety:
   Go`. Otherwise `No-Go`. The aggregator quotes the rationale from
-  whichever agent set `No-Go`. If either agent **FAILED**, CI
-  safety is `No-Go` with rationale `"<agent> failed: <reason>"`.
-  If either agent did not run, CI safety is `No-Go` with rationale
-  `"agent did not run"`.
+  whichever agent set `No-Go` (rendered in the CI safety row's
+  `Verdict` cell of the per-agent results table). If either agent
+  **FAILED**, CI safety is `No-Go` with rationale
+  `"<Agent display name> failed: <reason>"`. If either agent did
+  not run, CI safety is `No-Go` with rationale `"<Agent display
+  name> did not run"`.
 - **Merge readiness: Go** iff every registered reviewer agent
   **completed successfully** AND every per-agent `Verdict` is `Go`
   (i.e., zero outstanding must-fix across all agents). Any FAILED
   or did-not-run reviewer forces `No-Go` regardless of what the
   remaining reviewers found.
-- CI safety and merge readiness are independent on the `Go` side;
-  on the `No-Go` side, a sub-agent failure forces both.
-- **A failed reviewer never produces a Go on either axis.** No
-  silent fallback, no "good-enough" verdict.
+- CI safety and merge readiness are independent on the `Go` side.
+  On the `No-Go` side, the two axes have different blast radii:
+  - A failure (or did-not-run) of a **CI-safety** reviewer
+    (`security-review` or `supply-chain-review`, the two entries
+    with `contributes_to_ci_safety: true` in the registry) forces
+    **both** `CI safety: No-Go` AND `Merge readiness: No-Go`.
+  - A failure (or did-not-run) of any **other** reviewer
+    (`fprime-code-review`, `stale-documentation-review`,
+    `design-review`, `test-quality-review`) forces only
+    `Merge readiness: No-Go`. CI safety is unaffected by those
+    failures and is determined solely by the two CI-safety
+    reviewers per the first bullet above.
+- **A failed CI-safety reviewer never produces a Go on either
+  axis.** A failed non-CI-safety reviewer never produces a Go on
+  the merge-readiness axis. No silent fallback, no "good-enough"
+  verdict.
 - **`Recommend: Close` (§5e) forces both** `CI safety: No-Go` AND
   `Merge readiness: No-Go`. Don't run CI on a PR the aggregator
   thinks is spam; don't recommend merge of a PR the aggregator
@@ -261,8 +351,9 @@ run.`).
 
 After computing CI safety and Merge readiness, run a spam check.
 If the check fires, emit a `Recommend: Close` section at the **top**
-of the summary comment (above CI safety — deliberate so reviewers
-see it first) and force both verdicts to `No-Go` per §5c. The
+of the summary comment (above the per-agent results table —
+deliberate so reviewers see it first) and force both verdicts to
+`No-Go` per §5c. The
 closing line (§5f) is still rendered.
 
 ### Trigger — fires if ANY of the following holds
