@@ -169,6 +169,37 @@ implementation does not faithfully implement, or vice versa:
 
 **Finding-class:** `design-fpp-cpp-divergence`.
 
+### 6. Undocumented behavioral regression
+
+The PR changes a default value, buffer size, timeout, threshold, or
+any configurable constant in a way that alters observable behavior
+for existing deployments. The change may be correct, but it must be:
+
+- (a) acknowledged in the PR description,
+- (b) justified (why the new value is better), and
+- (c) assessed for backward compatibility (will existing deployments
+  break silently? do they need a migration step?).
+
+If any of (a), (b), (c) are missing, flag it.
+
+Examples:
+
+- Reducing a buffer size from 240 → 150 without stating what breaks.
+- Changing a timeout from 5s → 1s without explaining why.
+- Switching an enum default from A → B without migration guidance.
+- Narrowing a string field that previously accepted longer inputs.
+
+This category interacts with the C++ reviewer's CPP-30 (magic numbers)
+and CPP-31 (silent truncation). The design reviewer's focus is the
+*behavioral impact on existing users*; the C++ reviewer's focus is
+the *code-level correctness* of the implementation.
+
+**Finding-class:** `design-behavioral-regression`.
+
+**Default triage:** `**must fix**` when the change could silently break
+existing deployments; `**could fix**` when the change is clearly an
+improvement but lacks documentation.
+
 ---
 
 ## The special case — `design-needs-human-adjudication`
@@ -232,9 +263,9 @@ trigger-specific line.
 For all OTHER design finding-classes (`design-intent-mismatch`,
 `design-code-mismatch`, `design-fprime-anti-pattern`,
 `design-scope-creep`, `design-under-scoped`,
-`design-fpp-cpp-divergence`), the standard low-confidence /
-disagreement-escalation ping mechanism from the review contract
-applies, with no special always-on behavior.
+`design-fpp-cpp-divergence`, `design-behavioral-regression`), the
+standard low-confidence / disagreement-escalation ping mechanism
+from the review contract applies, with no special always-on behavior.
 
 ---
 
@@ -310,6 +341,9 @@ Append a maintainer ping per
   necessary.
 - **`design-fpp-cpp-divergence`**: `**must fix**` — FPP is a
   contract.
+- **`design-behavioral-regression`**: `**must fix**` when the change
+  could silently break existing deployments; `**could fix**` when
+  the change is clearly an improvement but lacks documentation.
 
 ---
 
